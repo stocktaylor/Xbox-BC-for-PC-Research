@@ -5,7 +5,9 @@ records what can actually be learned by inspecting the binaries and metadata fil
 shipped in `target/`. Findings below come from `file`, `strings`, and manual header
 inspection of the shipped DLLs/XEXs/config files — no disassembly or execution was
 performed. For an assessment of what this implies for running the package under
-Wine/Proton on Linux, see [WINE_COMPATIBILITY.md](WINE_COMPATIBILITY.md).
+Wine/Proton on Linux, see [WINE_COMPATIBILITY.md](WINE_COMPATIBILITY.md); for a
+comparison against the open-source Xenia Canary Xbox 360 emulator, see
+[XENIA_COMPARISON.md](XENIA_COMPARISON.md).
 
 ## 1. It is Xbox‑360‑on‑PC running the Xbox 360's *own* original‑Xbox compatibility layer
 

@@ -24,7 +24,8 @@ package is distributed as an MSIX-style appx (`appxmanifest.xml`, `<Identity>`,
 [TECHNICAL_FINDINGS.md §7](TECHNICAL_FINDINGS.md#7-manifestconfig-details-worth-calling-out)).
 Wine's AppX activation and Windows App SDK bootstrap support is minimal and inconsistent.
 This class of app (MSIX + Windows App SDK) is one of the worst-supported categories on
-Wine in general, independent of anything Xbox-specific.
+Wine in general, independent of anything Xbox-specific. *(See "Possible Mitigation:
+Replace EmuMenu" below — this specific blocker may be avoidable.)*
 
 ### 2. WebView2
 `EmuMenu` embeds WebView2 interop (`Microsoft.Web.WebView2.Core.dll`,
@@ -83,6 +84,45 @@ itself rather than bundled per-title. Since it's distributed through that same
 MSIX/Windows App SDK/Store machinery described above, simply locating a standalone copy
 of the file is unlikely to sidestep the compatibility issues above — it would come
 wrapped in the same platform requirements as everything else in this package.
+
+## Possible Mitigation: Replace EmuMenu (Speculative)
+
+**Everything in this section is conjecture — it has not been verified against `Emu.exe`,
+which isn't in this package, and no replacement has been built or tested.** It's recorded
+here as a plausible avenue worth checking once `Emu.exe` is obtained, not as a working
+plan.
+
+`EmuMenu` (per its own DLL contents — see the README's
+[Emulator Menu Launch Arguments](README.md#emulator-menu-launch-arguments) section)
+looks like a thin settings/branding shell: it reads/writes an INI-based settings store
+(`SettingsIni`, `SettingDisplay`, `Resolution`/`Resolutions`, `SaveSettings`), shows a
+title background and name from `EmuMenuLaunchArguments.txt`, and — per that same file's
+`exe=..\Emu.exe` line — ultimately spawns the real emulation host, `Emu.exe`, as a
+separate process. All of the WinUI 3 / Windows App SDK / WebView2 dependencies are
+declared in `EmuMenu.deps.json` / `EmuMenu.runtimeconfig.json`, scoped to that one
+process — nothing observed suggests `Emu.exe` itself shares those dependencies.
+
+If that separation holds, blocker #1 (and possibly #2) may be specific to the menu shell
+rather than the emulator, which would mean:
+- A minimal, non-WinUI3 replacement for `EmuMenu` (even a plain console/CLI launcher)
+  that sets up the same working directory and reads `LaunchArguments.txt` could
+  potentially invoke `Emu.exe` directly with equivalent arguments, sidestepping MSIX/
+  Windows App SDK/WebView2 entirely.
+- MSIX packaging mainly governs install/entry-point discovery through the Xbox App —
+  a `Windows.FullTrustApplication`-type exe like `Emu.exe`, once files are already on
+  disk, is not obviously re-checked against AppX activation on every launch the way
+  `EmuMenu.exe` (a WinUI3/Windows App SDK process) would be.
+
+Key unknowns that would need to be confirmed against the real `Emu.exe` before this is
+anything more than a guess:
+- Its actual invocation contract — command-line arguments, environment variables, or a
+  config file path — is unknown; the assumption that it accepts something derived from
+  `LaunchArguments.txt` is inferred from file naming/adjacency, not confirmed.
+- Whether `Emu.exe` itself calls into Xbox Live/licensing APIs independently of
+  `EmuMenu` (see blocker #3) — if so, replacing the UI shell doesn't address that
+  separate, likely harder problem.
+- Whether `Emu.exe` has its own undocumented dependency on Windows App SDK/WinRT APIs
+  that just aren't visible from `EmuMenu`'s side.
 
 ## Bottom line
 
