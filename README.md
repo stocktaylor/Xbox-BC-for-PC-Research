@@ -4,6 +4,8 @@ This project is research into the Original Xbox backward compatibility package t
 
 Microsoft announced this functionality on July 22nd, 2026 and made 4 Original Xbox games available.  The games can be downloaded via the Xbox app, and the file structure below is what is contained within the installation folder.
 
+Binary analysis of the shipped files (see [TECHNICAL_FINDINGS.md](TECHNICAL_FINDINGS.md) for the full deep dive) shows this isn't a from-scratch Original Xbox emulator: it repackages the **Xbox 360's own built-in Original Xbox backward compatibility layer**, internally codenamed **"Fusion"**. Several files that ship in this package (`xefu.xex`, `xefutitle.xex`, and everything under `Flash/`) are genuine Xbox 360 XEX executables — the same PowerPC code that has run on real Xbox 360 consoles since 2006 to play OG Xbox discs. That Xbox 360 code, along with a trimmed copy of the Xbox 360 dashboard it depends on, has been statically recompiled from PowerPC to native x64 (via an internal Microsoft toolchain named Ficl/"Fission") and shipped as the `xeo3_*.dll` / `xefu_*.dll` files, so the original Xbox title effectively runs "inside" a virtualized Xbox 360 on PC, the same way it did on real Xbox 360 hardware.
+
 ## Project Structure
 
 ```
@@ -31,8 +33,8 @@ target/
 │   ├── Thumbs.db                                # Thumbnail cache
 │   ├── VGPUDX12.dll                             # Virtual GPU DirectX 12 library
 │   ├── WideLogo.png                             # Wide logo
-│   ├── xefu_*.dll                               # Xbox Emulation Framework libraries
-│   ├── xeo3_*.dll                               # Xbox Emulation libraries
+│   ├── xefu_*.dll                               # Statically recompiled Xbox 360 compat-layer code (see System Libraries below)
+│   ├── xeo3_*.dll                               # Statically recompiled Xbox 360/Original Xbox game code (see System Libraries below)
 │   ├── EmuMenu/                                 # Emulator menu application
 │   │   ├── EmuMenu.exe                          # Emulator menu executable
 │   │   ├── EmuMenu.dll                          # Emulator menu library
@@ -81,12 +83,14 @@ target/
 - **Strings/**: Localization files for multiple languages
 
 ### System Libraries
-- **xefu_*.dll** and **xeo3_*.dll**: Xbox Emulation Framework libraries that provide compatibility layer
-- **D3D12Core.dll** and **VGPUDX12.dll**: DirectX 12 graphics libraries for rendering
+- **xefu_*.dll** and **xeo3_*.dll**: Native x64 DLLs produced by statically recompiling the Xbox 360's Original Xbox compatibility XEXs (PowerPC) ahead of time — the actual translated compatibility/game code, not a generic runtime CPU emulator
+- **D3D12Core.dll** and **VGPUDX12.dll**: DirectX 12 graphics libraries for rendering; `VGPUDX12.dll` also owns the `XeO3_ShaderCache/` directory
+- **SystemPartition/Compatibility/**, **SystemExtPartition/**, **Flash/*.xex**: genuine Xbox 360 XEX executables (`xefu.xex`, `xefutitle.xex`, `Xam.Community.xex`, `xam.xex`, `hud.xex`, `huduiskin.xex`, `ximecore.xex`) plus `xboxkrnlcf.bin`, a PowerPC big-endian kernel-compatibility shim — together these form the trimmed Xbox 360 + Original Xbox kernel environment the game actually boots into
 
 ## Game Information
-- **Game Title**: Fuzion Frenzy®
-- **Title ID**: 057442C0
+- **Package Display Name**: Fuzion Frenzy®
+- **Package/Store Title ID**: 057442C0 (`MicrosoftGame.config` — the modern Xbox package identity)
+- **Original Xbox Title ID**: 4D530856 (`LaunchArguments.txt` — the title ID from the original 2003 Xbox release; the top two bytes, `4D53`, spell `"MS"`, the publisher code Microsoft used for first-party Original Xbox titles)
 - **Store ID**: C2P985H1H42H
 - **Publisher**: Gaming Platform Team
 - **Version**: 2607.1523.1.0
@@ -102,6 +106,27 @@ This package is designed for Windows 10/11 desktop platforms with:
 - Windows App Runtime 1.8
 - GameInput redistributable (installed via MSI)
 
+## Technical Details
+
+### Launch Arguments
+`Content/LaunchArguments.txt` contains:
+- `aaBoostOn`
+- `aaBoostTargetMsaa=1`
+- `disableAudioOnConstrained`
+- `fusion` — references the internal "Fusion" codename for the Xbox 360-derived compatibility subsystem, see [TECHNICAL_FINDINGS.md](TECHNICAL_FINDINGS.md)
+- `mediaId=b812b25c-ff51-40f1-80ef-e0e1ddca4f38`
+- `scalingResolutions=720x0 844x0 1280x0 0x240 0x480 0x256`
+- `titleId=4D530856`
+- `configurationId=74340100-b1d0-46db-885f-e6bc057442c0`
+
+### Emulator Menu Launch Arguments
+`Content/EmuMenu/EmuMenuLaunchArguments.txt` contains:
+- `exe=..\Emu.exe`
+- `titlename=Fuzion Frenzy®`
+- `background=..\background_launcher.png`
+
+`Emu.exe` itself is not shipped in this package, which suggests it's a shared component installed once system-wide rather than bundled per-title. `EmuMenu` is a .NET 8 / WinUI 3 desktop app that also embeds WebView2 and DirectX interop (via Vortice/SharpGen), and persists its own settings through an INI-based `SettingsIni` system.
+
 ## How It Works
 This project uses an Original Xbox emulator to run Original Xbox games on Windows. The package includes:
 1. The emulator menu (EmuMenu) that provides the user interface
@@ -109,8 +134,4 @@ This project uses an Original Xbox emulator to run Original Xbox games on Window
 3. Compatibility libraries that translate Original Xbox calls to Windows APIs
 4. Configuration files that define how the game should be launched and run
 
-The system uses a backward compatibility approach that allows Original Xbox games to run on modern Windows systems by emulating the Original Xbox hardware and operating system environment.
-
----
-
-This research work was done by qwen3-coder
+Under the hood, this backward compatibility approach doesn't emulate Original Xbox hardware directly. It repackages the Original Xbox compatibility layer that has shipped inside every Xbox 360 since 2006: an Xbox 360 kernel-level shim (`xboxkrnlcf.bin`) hosts a recompiled Original Xbox kernel (`xb1krnl`), which runs the actual Original Xbox title (`default.xbe`) inside a trimmed, virtualized Xbox 360 environment (dashboard, sign-in, guide, etc., all present as real Xbox 360 XEX modules). That whole PowerPC stack — Xbox 360 compatibility layer plus the Original Xbox title's code — is statically recompiled ahead of time to native x64 and shipped as the `xefu_*.dll` / `xeo3_*.dll` files, with `VGPUDX12.dll` translating the original GPU command stream to Direct3D 12. See [TECHNICAL_FINDINGS.md](TECHNICAL_FINDINGS.md) for the full evidence trail (embedded build paths, XEX headers, shader cache title IDs, etc.).
