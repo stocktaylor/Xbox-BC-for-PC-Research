@@ -1,10 +1,11 @@
 # Technical Findings — Original Xbox BC ("Fuzion Frenzy") Deep Dive
 
-This document goes beyond the file-listing overview in [README.md](README.md) /
-[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) and records what can actually be learned by
-inspecting the binaries and metadata files shipped in `target/`. Findings below come from
-`file`, `strings`, and manual header inspection of the shipped DLLs/XEXs/config files — no
-disassembly or execution was performed.
+This document goes beyond the file-listing overview in [README.md](README.md) and
+records what can actually be learned by inspecting the binaries and metadata files
+shipped in `target/`. Findings below come from `file`, `strings`, and manual header
+inspection of the shipped DLLs/XEXs/config files — no disassembly or execution was
+performed. For an assessment of what this implies for running the package under
+Wine/Proton on Linux, see [WINE_COMPATIBILITY.md](WINE_COMPATIBILITY.md).
 
 ## 1. It is Xbox‑360‑on‑PC running the Xbox 360's *own* original‑Xbox compatibility layer
 
