@@ -1,6 +1,8 @@
-# Xbox 360 Backward Compatibility Project - Fuzion Frenzy®
+# Original Xbox Backward Compatibility Project - Fuzion Frenzy®
 
-This project is an Xbox 360 backward compatibility package that allows Xbox 360 games to run on Windows 10/11 using an emulator. The package is designed to run the game "Fuzion Frenzy®" on PC.
+This project is research into the Original Xbox backward compatibility package that allows Original Xbox games to run on Windows 10/11 using an emulator. The specific package analyized is designed to run the game "Fuzion Frenzy®" on PC.
+
+Microsoft announced this functionality on July 22nd, 2026 and made 4 Original Xbox games available.  The games can be downloaded via the Xbox app, and the file structure below is what is contained within the installation folder.
 
 ## Project Structure
 
@@ -101,13 +103,13 @@ This package is designed for Windows 10/11 desktop platforms with:
 - GameInput redistributable (installed via MSI)
 
 ## How It Works
-This project uses an Xbox 360 emulator to run Xbox 360 games on Windows. The package includes:
+This project uses an Original Xbox emulator to run Original Xbox games on Windows. The package includes:
 1. The emulator menu (EmuMenu) that provides the user interface
 2. Game executables and assets in the Flash directory
-3. Compatibility libraries that translate Xbox 360 calls to Windows APIs
+3. Compatibility libraries that translate Original Xbox calls to Windows APIs
 4. Configuration files that define how the game should be launched and run
 
-The system uses a backward compatibility approach that allows Xbox 360 games to run on modern Windows systems by emulating the Xbox 360 hardware and operating system environment.
+The system uses a backward compatibility approach that allows Original Xbox games to run on modern Windows systems by emulating the Original Xbox hardware and operating system environment.
 
 ---
 
