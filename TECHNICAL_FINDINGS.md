@@ -158,10 +158,77 @@ own original-Xbox BC XEX modules plus the target title's original `default.xbe`,
 (2) statically recompiles the combined PowerPC code to x64 ahead of time via Ficl,
 (3) packages the result together with a trimmed Xbox 360 dashboard flash image, the
 original-Xbox kernel shim (`xboxkrnlcf`/`xb1krnl`), and the new WinUI `EmuMenu` front end,
-and (4) ships it as an MSIX-style desktop package through the Xbox app.
+and (4) ships it as an MSIX-style desktop package through the Xbox app. (Section 9 below
+shows this pipeline runs per-title, with branch labels that shift between packages even
+for otherwise-identical shared components.)
+
+## 9. Cross-title comparison (Fuzion Frenzy® vs. Conker: Live and Reloaded)
+
+The `target/` folder was later swapped to a second title's package — **Conker: Live and
+Reloaded** (install GUID `88823EC3-7CFC-4A70-A1A1-CBBDD7186AA9`, package identity
+`Xbox360BackwardCompatibil.PrimaryConkerLiveReloade`, Original Xbox title ID `4D530051`,
+package/store title ID `27028FBB`, package version `2607.1623.1.0`). The folder layout
+is byte-identical in structure to the Fuzion Frenzy package; diffing the two packages'
+contents confirms several things that couldn't be proven from a single sample:
+
+**The engine/game DLL split is real and content-addressed.** All 8 `xeo3_<hash>.dll`
+(+ `_no` twin) pairs and `xefu_69c41281_00027bcf.dll` (the recompiled `xb1krnl` kernel
+shim) are **byte-for-byte identical** (verified via `sha256sum`) between the two
+packages — same filenames *and* same hashes. Each package additionally carries exactly
+one more `xefu_<hash>.dll` that differs per title
+(`xefu_ad64d751_d1837ae9_e9a45c7f_6396b532_81821c8d.dll` for Fuzion Frenzy vs.
+`xefu_70648536_7d88890e_d7dee586_06a66283_ad43dc7e.dll` for Conker). The Conker copy's
+debug strings point at
+`D:\temp\20F917\obj\xbox\emulator\ppc\titles\ConkerLiveandReloaded_4D530051\GAM_0\...`,
+mirroring the Fuzion Frenzy pattern (`FuzionFrenzy4D530856\GAM_0\...`) and confirming the
+hashed filenames are content-addressed identifiers for compiled modules: the shared
+Xbox 360 compatibility engine is one set of modules reused verbatim across titles, and
+each package adds one title-specific recompiled-game module.
+
+**But the shared modules are still rebuilt per package, not copied from one master.**
+Despite being byte-identical in output, the embedded build-branch label inside the
+shared DLLs differs between packages — `20F914` in the Fuzion Frenzy package's copy of
+`xeo3_11149bba_...dll` and `xefu_69c41281_00027bcf.dll`, vs. `20F912` in Conker's copy of
+the exact same (hash-identical) files. The per-title DLL's own branch differs too
+(`20F919` for Fuzion Frenzy vs. `20F917` for Conker). This indicates each title package
+is independently rebuilt from Microsoft's internal branch at packaging time, and the
+shared engine components simply happen to produce identical output because the
+underlying Xbox 360 compatibility XEX hasn't changed between those branch snapshots —
+this isn't a single shared binary distributed to every package.
+
+**`LaunchArguments.txt` is per-title, not a fixed template.** Conker's copy drops two
+flags present for Fuzion Frenzy (`disableAudioOnConstrained`, `scalingResolutions=...`)
+that read as opt-in compatibility tuning rather than universal flags. See the README's
+[Launch Arguments](README.md#launch-arguments) section for the full side-by-side.
+
+**`mediaId` isn't always a real disc ID.** Fuzion Frenzy's `mediaId` is a
+non-obviously-derived GUID (`b812b25c-ff51-40f1-80ef-e0e1ddca4f38`), plausibly the
+original disc's real XGD media ID. Conker's is transparently synthesized from its own
+title ID: `mediaId=4d530051-0000-0000-0000-000000000000` — the title ID hex followed by
+zeros, not a real per-disc identifier. The packaging pipeline appears to fabricate a
+placeholder when a genuine media ID isn't available/needed rather than omitting the
+field.
+
+**`SystemAuxPartition/` is optional.** It exists (empty) in the Fuzion Frenzy package
+but is entirely absent from the Conker package — this directory is apparently
+created only when a given title needs it, not unconditionally.
+
+**Payload size scales with the original disc, chunk size does not.** Conker's
+`DefaultPackage.data/` has 29 chunks (~4.6 GB total) vs. Fuzion Frenzy's 13 (~2.0 GB) —
+consistent with Conker: Live and Reloaded being a substantially larger original Xbox
+game (full voice-acted remake vs. a launch-window party game). In both packages every
+chunk but the last is exactly 170,459,136 bytes (~162.56 MiB); only the final chunk is
+shorter, confirming a fixed chunk size with the title's true payload size determining
+chunk *count*.
+
+**The loose root-level state files (`.xct`/`.xvi`/`.xvs`/`.smd`/`.xss`) follow the same
+format for both titles** — identical magic bytes/JSON shapes as documented in section 5
+above, just with per-install GUIDs/`StateId`s substituted in, confirming that format is
+a general BC-host convention rather than something specific to one title.
 
 ---
 
-*Findings derived solely from static inspection (`file`, `strings`, header bytes) of the
-files present in `target/` as of 2026‑07‑22. Nothing here required disassembly,
+*Findings derived solely from static inspection (`file`, `strings`, `sha256sum`, header
+bytes) of the files present in `target/` as of 2026‑07‑22, across two title packages
+(Fuzion Frenzy® and Conker: Live and Reloaded). Nothing here required disassembly,
 decryption, or execution of any binary.*

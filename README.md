@@ -57,7 +57,7 @@ target/
 │   │   └── GameInputRedist.msi                  # Game input redistributable
 │   ├── Strings/                                 # Localization files
 │   │   └── Resources.resw                       # Resource file for localization
-│   ├── SystemAuxPartition/                      # Auxiliary system partition
+│   ├── SystemAuxPartition/                      # Auxiliary system partition (seen empty in the Fuzion Frenzy package; absent entirely from the Conker package — appears optional/title-dependent)
 │   ├── SystemExtPartition/                      # Extended system partition
 │   ├── SystemPartition/                         # System partition
 │   └── XeO3_ShaderCache/                        # Shader cache
@@ -87,13 +87,27 @@ target/
 - **D3D12Core.dll** and **VGPUDX12.dll**: DirectX 12 graphics libraries for rendering; `VGPUDX12.dll` also owns the `XeO3_ShaderCache/` directory
 - **SystemPartition/Compatibility/**, **SystemExtPartition/**, **Flash/*.xex**: genuine Xbox 360 XEX executables (`xefu.xex`, `xefutitle.xex`, `Xam.Community.xex`, `xam.xex`, `hud.xex`, `huduiskin.xex`, `ximecore.xex`) plus `xboxkrnlcf.bin`, a PowerPC big-endian kernel-compatibility shim — together these form the trimmed Xbox 360 + Original Xbox kernel environment the game actually boots into
 
+### Per-Title vs. Shared Components
+Comparing the Fuzion Frenzy and Conker: Live and Reloaded packages byte-for-byte shows the `xeo3_*.dll` / `xefu_*.dll` set splits cleanly into two categories:
+- **Shared engine files** — the 8 `xeo3_<hash>.dll` (+ `_no` twin) pairs and `xefu_69c41281_00027bcf.dll` (the recompiled `xb1krnl` kernel shim) are **byte-identical** (same filenames, same SHA-256) between both packages. These are the generic Xbox 360/Original-Xbox compatibility engine, reused as-is across titles.
+- **One per-title file** — each package carries exactly one additional `xefu_<hash>.dll` that differs per game (`xefu_ad64d751_..._81821c8d.dll` for Fuzion Frenzy vs. `xefu_70648536_..._ad43dc7e.dll` for Conker). Debug strings inside it point at the title's own recompiled `default.xbe` (e.g. `...\ppc\titles\ConkerLiveandReloaded_4D530051\GAM_0\...`) — this is the one file that is genuinely game-specific.
+- Even though the shared files are byte-identical, the internal build-tree branch label embedded in their debug strings differs per package (`20F914` for the Fuzion Frenzy package vs. `20F912` for the Conker package) — the shared engine appears to be *rebuilt* for every title package rather than copied from one master build, but converges on identical output when the underlying Xbox 360 XEX hasn't changed. The per-title DLL is always built on its own separate branch (`20F919` for Fuzion Frenzy, `20F917` for Conker).
+
 ## Game Information
-- **Package Display Name**: Fuzion Frenzy®
-- **Package/Store Title ID**: 057442C0 (`MicrosoftGame.config` — the modern Xbox package identity)
-- **Original Xbox Title ID**: 4D530856 (`LaunchArguments.txt` — the title ID from the original 2003 Xbox release; the top two bytes, `4D53`, spell `"MS"`, the publisher code Microsoft used for first-party Original Xbox titles)
-- **Store ID**: C2P985H1H42H
-- **Publisher**: Gaming Platform Team
-- **Version**: 2607.1523.1.0
+Values below are per-title; both packages observed so far are listed for comparison (see [TECHNICAL_FINDINGS.md](TECHNICAL_FINDINGS.md) for how these were extracted).
+
+| Field | Fuzion Frenzy® | Conker: Live and Reloaded |
+|---|---|---|
+| Package/Store Title ID (`MicrosoftGame.config`) | 057442C0 | 27028FBB |
+| Original Xbox Title ID (`LaunchArguments.txt`) | 4D530856 | 4D530051 |
+| Store ID | C2P985H1H42H | BVFB8CBS75R6 |
+| Package Version | 2607.1523.1.0 | 2607.1623.1.0 |
+| MSAAppId | 00000000482787E9 | 000000004C270AF2 |
+| SaveGameStorage SCID / `configurationId` | 74340100-b1d0-46db-885f-e6bc057442c0 | 33f30100-1908-4e64-bd9a-cab427028fbb |
+| Protocol registered | `ms-xbl-057442c0` | `ms-xbl-27028fbb` |
+| `Content/Game/DefaultPackage.data/` chunk count | 13 (~2.0 GB) | 29 (~4.6 GB) |
+
+Publisher is `Gaming Platform Team` for both. Both Original Xbox title IDs start with `4D53` (`"MS"` in ASCII) — the publisher code Microsoft used for first-party Original Xbox titles (Fuzion Frenzy was Microsoft Game Studios; Conker: Live and Reloaded was Rare, which Microsoft owned and self-published under the same prefix). Game payload chunk size is a fixed 170,459,136 bytes (~162.56 MiB) per chunk in both packages, only the final chunk is shorter — chunk *count* simply scales with the game's disc size.
 
 ## Platform Support
 This package is designed for Windows 10/11 desktop platforms with:
@@ -109,23 +123,47 @@ This package is designed for Windows 10/11 desktop platforms with:
 ## Technical Details
 
 ### Launch Arguments
-`Content/LaunchArguments.txt` contains:
-- `aaBoostOn`
-- `aaBoostTargetMsaa=1`
-- `disableAudioOnConstrained`
-- `fusion` — references the internal "Fusion" codename for the Xbox 360-derived compatibility subsystem, see [TECHNICAL_FINDINGS.md](TECHNICAL_FINDINGS.md)
-- `mediaId=b812b25c-ff51-40f1-80ef-e0e1ddca4f38`
-- `scalingResolutions=720x0 844x0 1280x0 0x240 0x480 0x256`
-- `titleId=4D530856`
-- `configurationId=74340100-b1d0-46db-885f-e6bc057442c0`
+`Content/LaunchArguments.txt` is **not a fixed template** — each title ships its own tailored set of flags. Comparing the two packages observed:
+
+**Fuzion Frenzy®:**
+```
+aaBoostOn
+aaBoostTargetMsaa=1
+disableAudioOnConstrained
+fusion
+mediaId=b812b25c-ff51-40f1-80ef-e0e1ddca4f38
+scalingResolutions=720x0 844x0 1280x0 0x240 0x480 0x256
+titleId=4D530856
+configurationId=74340100-b1d0-46db-885f-e6bc057442c0
+```
+
+**Conker: Live and Reloaded:**
+```
+aaBoostOn
+aaBoostTargetMsaa=1
+fusion
+mediaId=4d530051-0000-0000-0000-000000000000
+titleId=4D530051
+configurationId=33f30100-1908-4e64-bd9a-cab427028fbb
+```
+
+Takeaways from the diff:
+- `aaBoostOn`, `aaBoostTargetMsaa=1`, `fusion`, `mediaId`, `titleId`, and `configurationId` are common to both — likely always present.
+- `disableAudioOnConstrained` and `scalingResolutions=...` appear **only** for Fuzion Frenzy. These read as per-title compatibility tuning flags (audio behavior under constrained/low-power conditions, and a fixed list of display-scaling resolution buckets the original title rendered at) that Microsoft opts individual titles into rather than applying universally.
+- `fusion` references the internal **"Fusion"** codename for the Xbox 360-derived compatibility subsystem — see [TECHNICAL_FINDINGS.md](TECHNICAL_FINDINGS.md).
+- `mediaId` format differs meaningfully: Fuzion Frenzy has a genuine random-looking GUID (presumably the original disc's real XGD media ID), while Conker's is a **synthesized** GUID — literally the hex title ID (`4d530051`) padded with zeros (`4d530051-0000-0000-0000-000000000000`). This suggests that when a title's real original-disc media ID either isn't tracked or isn't needed, the build pipeline fabricates a placeholder GUID from the title ID instead of leaving the field blank.
+- `configurationId` always matches the `SCID` from that title's `MicrosoftGame.config`.
 
 ### Emulator Menu Launch Arguments
-`Content/EmuMenu/EmuMenuLaunchArguments.txt` contains:
-- `exe=..\Emu.exe`
-- `titlename=Fuzion Frenzy®`
-- `background=..\background_launcher.png`
+`Content/EmuMenu/EmuMenuLaunchArguments.txt` follows a fixed template that only swaps the title name, e.g. for Fuzion Frenzy:
+```
+exe=..\Emu.exe
+titlename=Fuzion Frenzy®
+background=..\background_launcher.png
+```
+(Conker: Live and Reloaded's copy is identical apart from `titlename=Conker: Live and Reloaded`.)
 
-`Emu.exe` itself is not shipped in this package, which suggests it's a shared component installed once system-wide rather than bundled per-title. `EmuMenu` is a .NET 8 / WinUI 3 desktop app that also embeds WebView2 and DirectX interop (via Vortice/SharpGen), and persists its own settings through an INI-based `SettingsIni` system.
+`Emu.exe` itself is not shipped in either package, which suggests it's a shared component installed once system-wide rather than bundled per-title. `EmuMenu` is a .NET 8 / WinUI 3 desktop app that also embeds WebView2 and DirectX interop (via Vortice/SharpGen), and persists its own settings through an INI-based `SettingsIni` system.
 
 ## How It Works
 This project uses an Original Xbox emulator to run Original Xbox games on Windows. The package includes:
