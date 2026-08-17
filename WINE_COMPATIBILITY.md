@@ -43,7 +43,8 @@ Together this points to a runtime entitlement/sign-in check against Xbox Live, m
 likely brokered through Windows' Web Account Manager (WAM) — a Windows-only
 authentication component with no real Wine equivalent. This is a recurring, well-known
 pain point for GDK titles on Proton generally, separate from any graphics or API
-translation concern.
+translation concern. *(See "Possible Mitigation: Xodus" below — this specific blocker
+may have a partial answer already in progress elsewhere.)*
 
 ### 4. Encrypted game payload
 `Content/Game/DefaultPackage.data/Data0000...` is high-entropy/encrypted (see
@@ -123,6 +124,75 @@ anything more than a guess:
   separate, likely harder problem.
 - Whether `Emu.exe` has its own undocumented dependency on Windows App SDK/WinRT APIs
   that just aren't visible from `EmuMenu`'s side.
+
+## Possible Mitigation: Xodus (Speculative)
+
+**This section reflects public repo contents (READMEs, docs, `.idl` interface files)
+read at the time of writing — nothing was built, run, or tested.**
+[github.com/xodus-gaming](https://github.com/xodus-gaming) ("Linux is PC too" — "Bring
+Xbox PC games to Linux and macOS"), explicitly not affiliated with or endorsed by
+Microsoft, is reimplementing pieces of the Xbox-on-PC platform stack across several
+repos:
+
+- **`xodus`** — authentication, token exchange, package download, and license
+  management
+- **`xgameruntime`** — a **Wine builtin DLL** (ships the standard Wine module
+  scaffolding: `Makefile.in`, an `xgameruntime.spec` file, LGPL-2.1) that reimplements
+  the real `xgameruntime.dll`'s public COM API surface: `xstore.idl`, `xuser.idl`,
+  `xgamesave.idl`, `xgameactivation.idl`, `xnetworking.idl`, plus the `xtaskqueue`/
+  `xasync` async plumbing GDK calls run through. In other words, it intercepts the DLL
+  a GDK game links against at the Wine level and serves real calls from Linux-native
+  code, rather than patching the game or the package itself.
+- **`xgameruntime-docs`** — black-box reverse-engineering notes on the *real*
+  `xgameruntime.dll`'s init sequence: `InitializeApiImpl(gdkVer, gsVer)` (documented as
+  effectively dead in practice), superseded by `InitializeApiImplEx`/
+  `InitializeApiImplEx2`, plus `QueryApiImpl`, `UninitializeApiImpl`, and
+  `XErrorReport`. This is the groundwork for knowing what `xgameruntime` has to imitate.
+- **`xal-rs`** — a fork of OpenXbox's Xbox Authentication Library, a longstanding,
+  established reverse-engineering effort
+- **`wine`/`Proton`** — forks of ValveSoftware's Wine/Proton carrying Xodus-specific
+  patches
+
+Two concrete connection points to this specific package, not just plausible-sounding
+overlap:
+- **`xgameactivation.idl`'s `XGameActivationType::Protocol` handling is a direct match**
+  to the `ms-xbl-<titleid>` protocol extension registered in this BC package's
+  `appxmanifest.xml` (see
+  [TECHNICAL_FINDINGS.md §7](TECHNICAL_FINDINGS.md#7-manifestconfig-details-worth-calling-out)) —
+  a confirmed link, not a guess.
+- **The `XStore*` functions Xodus reimplements are Microsoft's own public GDK API**
+  (`XStoreQueryGameLicenseAsync`, `XStoreAcquireLicenseForPackageAsync`,
+  `XStoreIsLicenseValid`, `XStoreQueryEntitledProductsAsync`, etc.), not secret
+  internals. If Xodus's backend genuinely calls through to Microsoft's real Store/Xbox
+  Live services using the signed-in user's real, entitled account — rather than
+  spoofing a license — this is client-side interoperability (comparable to the
+  clean-room reimplementation Xenia does for the Xbox 360 kernel/dashboard, see
+  [XENIA_COMPARISON.md](XENIA_COMPARISON.md)) rather than DRM circumvention: the actual
+  entitlement check would still happen server-side against Microsoft, just orchestrated
+  by non-Microsoft client code.
+
+Mapped against the blockers above:
+- **Blocker #3 (Xbox Live licensing/identity)** is squarely their stated scope and now
+  has concrete API-level evidence behind it (the `XStore*`/`xuser` reimplementation) —
+  the most plausible real overlap with what's blocking this package.
+- **Blocker #1 (MSIX + Windows App SDK)** — no mention of MSIX/AppxManifest/WinUI3
+  anywhere in either repo's visible contents. `xgameruntime.dll` is normally just a DLL
+  a Win32 game links against directly, independent of how the game is packaged, so this
+  blocker (specific to `EmuMenu`'s WinUI3/MSIX shell) still looks out of scope for what
+  Xodus currently does.
+- **Blocker #4 (encrypted payload)** remains unconfirmed either way — plausible if the
+  license flow above is what ultimately unlocks content decryption, but this BC
+  package's DRM chain (tied to the embedded Xbox 360 dashboard/`PlayReady.xex`) may
+  differ from a standard GDK Game Pass title's.
+
+Maturity caveat: the `xgameruntime` repo looked young/thin at the time of writing (~26
+commits, extensive `.idl` interface definitions against comparatively stub-like `.c`
+implementations) — a promising direction, not a finished solution. And this BC package
+remains architecturally unusual compared to the ordinary GDK PC games Xodus's repos
+otherwise target (statically recompiled Xbox 360 XEX code, a virtualized Xbox 360
+dashboard, a WinUI3 launcher — see [TECHNICAL_FINDINGS.md](TECHNICAL_FINDINGS.md)), so
+even where the underlying Xbox Live/licensing layer is shared, this specific title
+isn't obviously "in scope" without adaptation.
 
 ## Bottom line
 
